@@ -7,6 +7,9 @@ function App() {
   const [altText, setAltText] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Use environment variable for API base URL
+  const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8001";
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -23,7 +26,7 @@ function App() {
     setAltText("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8001/generate-alt-text", {
+      const response = await fetch(`${API_BASE_URL}/generate-alt-text`, {
         method: "POST",
         body: formData,
       });

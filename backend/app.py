@@ -1,4 +1,5 @@
 # app.py
+import os
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +14,7 @@ app = FastAPI(title="Image Alt-Text API")
 # Allow frontend (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins (relax in production)
+    allow_origins=["https://alt-text-alternative.vercel.app/"],  # allow all origins; tighten in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -56,3 +57,10 @@ async def generate_alt_text(
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# Run with uvicorn when executed directly
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))  # Use Render's PORT env variable
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port)
