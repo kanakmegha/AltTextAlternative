@@ -14,7 +14,7 @@ app = FastAPI(title="Image Alt-Text API")
 # Allow frontend (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://alt-text-alternative.vercel.app/"],  # allow all origins; tighten in production
+    allow_origins=["*"],  # allow all origins; tighten in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
