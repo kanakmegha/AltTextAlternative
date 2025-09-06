@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Alt-Text Generator</title>
+</head>
+<body>
+  <h2>Upload Image for Alt-Text</h2>
+  <form id="uploadForm">
+    <input type="file" id="imageFile" name="file" accept="image/*" required />
+    <br /><br />
+    <label for="wordLimit">Word Limit:</label>
+    <input type="number" id="wordLimit" name="word_limit" value="20" min="5" />
+    <br /><br />
+    <button type="submit">Generate Alt-Text</button>
+  </form>
+  <br />
+  <div id="result"></div>
+
+  <script>
+    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append("file", document.getElementById("imageFile").files[0]);
+      formData.append("word_limit", document.getElementById("wordLimit").value);
+
+      const response = await fetch("http://127.0.0.1:8000/generate-alt-text", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+      document.getElementById("result").innerText =
+        result.alt_text || result.error;
+    });
+  </script>
+</body>
+</html>
