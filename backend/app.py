@@ -1,53 +1,37 @@
 import os
-import io
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+import requests
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
-from PIL import Image
 
 app = FastAPI()
 
-# --- 1. Fix CORS ---
-# Replace the URL below with your actual Vercel URL
+# Add your Vercel URL here
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://alt-text-alternative-6s2t-qzje1dq4t.vercel.app" 
-    ],
-    allow_credentials=True,
+    allow_origins=["*"], 
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- 2. Initialize Gemini ---
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-1.5-flash')
+HF_TOKEN = os.environ.get("HUGGINGFACE_TOKEN")
+# This is the "lightweight" base model
+API_URL = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
 @app.post("/generate-alt-text")
-async def generate_alt_text(
-    file: UploadFile = File(...), 
-    word_limit: int = Form(20)
-):
+async def generate_alt_text(file: UploadFile = File(...)):
     try:
-        # Read the uploaded file bytes
-        content = await file.read()
-        if not content:
-            raise HTTPException(status_code=400, detail="Empty file uploaded")
-
-        # Open image and handle formats like TIFF or RGBA
-        img = Image.open(io.BytesIO(content))
+        image_data = await file.read()
         
-        # Convert to RGB (required for many AI models and prevents 400 errors)
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-
-        # Generate alt text using Gemini
-        prompt = f"Describe this image for alt-text in under {word_limit} words."
-        response = model.generate_content([prompt, img])
+        # Send image to Hugging Face
+        response = requests.post(API_URL, headers=headers, data=image_data)
+        result = response.json()
         
-        return {"alt_text": response.text}
-    
+        # BLIP returns a list: [{'generated_text': 'a cat sitting on a table'}]
+        if isinstance(result, list) and len(result) > 0:
+            return {"alt_text": result[0].get("generated_text", "No description generated.")}
+        
+        return {"error": "Unexpected response format", "details": result}
+        
     except Exception as e:
-        print(f"Error: {str(e)}") # Visible in Render logs
         return HTTPException(status_code=500, detail=str(e))
