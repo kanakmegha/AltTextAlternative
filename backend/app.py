@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-HF_TOKEN = os.environ.get("HUGGINGFACE_TOKEN")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 # This is the "lightweight" base model
 API_URL = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-base"
 headers = {"Authorization": f"Bearer {HF_TOKEN}"}
