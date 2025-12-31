@@ -1,66 +1,54 @@
-# app.py
 import os
+import io
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from transformers import Blip2Processor, Blip2ForConditionalGeneration
+import google.generativeai as genai
 from PIL import Image
-import torch
-import io
 
-# Initialize FastAPI
-app = FastAPI(title="Image Alt-Text API")
+app = FastAPI(title="Fast Image Alt-Text API")
 
 # Allow frontend (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins; tighten in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load model & processor once at startup
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model_name = "Salesforce/blip2-opt-2.7b"  # Big model (slow but accurate)
-
-processor = Blip2Processor.from_pretrained(model_name)
-model = Blip2ForConditionalGeneration.from_pretrained(
-    model_name,
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32
-)
-model.to(device)
+# Setup Gemini (Get your free key at: https://aistudio.google.com/)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 @app.post("/generate-alt-text")
 async def generate_alt_text(
     file: UploadFile = File(...),
     word_limit: int = Form(20)
 ):
+    if not GEMINI_API_KEY:
+        return JSONResponse(content={"error": "API Key not configured"}, status_code=500)
+
     try:
-        # Read uploaded image
+        # 1. Read and optimize image (Resize to save bandwidth/speed)
         image_bytes = await file.read()
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img.thumbnail((800, 800)) # Resize to max 800px
 
-        # Preprocess
-        inputs = processor(images=image, return_tensors="pt").to(device)
-
-        # Generate caption
-        output = model.generate(**inputs, max_new_tokens=word_limit + 5)
-        caption = processor.decode(output[0], skip_special_tokens=True)
-
-        # Enforce word limit
-        caption_words = caption.split()
-        if len(caption_words) > word_limit:
-            caption = " ".join(caption_words[:word_limit])
+        # 2. Call Gemini API
+        prompt = f"Describe this image for an alt-text attribute in under {word_limit} words."
+        response = model.generate_content([prompt, img])
+        
+        caption = response.text.strip()
 
         return JSONResponse(content={"alt_text": caption})
 
     except Exception as e:
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        print(f"Error: {e}")
+        return JSONResponse(content={"error": "Failed to process image"}, status_code=500)
 
-
-# Run with uvicorn when executed directly
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))  # Use Render's PORT env variable
     import uvicorn
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
