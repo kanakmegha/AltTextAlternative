@@ -10,38 +10,25 @@ function App() {
   // Use environment variable for API base URL
   const API_BASE_URL = process.env.REACT_APP_API_URL || "http://127.0.0.1:8001";
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!file) {
-      alert("Please upload an image");
-      return;
-    }
-
+  const handleSubmit = async (data) => {
     const formData = new FormData();
-    formData.append("file", file);
-    formData.append("word_limit", wordLimit);
-
-    setLoading(true);
-    setAltText("");
-
+    // Ensure the key name matches 'file' in your FastAPI function
+    formData.append("file", data.image[0]); 
+    formData.append("word_limit", 20);
+  
     try {
-      const response = await fetch(`${API_BASE_URL}/generate-alt-text`, {
+      const response = await fetch("https://alttextalternative.onrender.com/generate-alt-text", {
         method: "POST",
         body: formData,
+        // Note: Do NOT set Content-Type header manually; the browser does it for FormData
       });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setAltText(data.alt_text || "No alt text generated.");
-    } catch (error) {
-      console.error("Error:", error);
-      setAltText("Error: Failed to fetch alt text");
-    } finally {
-      setLoading(false);
+  
+      if (!response.ok) throw new Error("Server returned an error");
+      
+      const result = await response.json();
+      setAltText(result.alt_text);
+    } catch (err) {
+      console.error("Fetch error:", err);
     }
   };
 

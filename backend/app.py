@@ -1,40 +1,53 @@
 import os
 import io
-import google.generativeai as genai
-from fastapi import FastAPI, File, UploadFile, Form
-from fastapi.responses import StreamingResponse
-from PIL import Image
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import google.generativeai as genai
+from PIL import Image
 
 app = FastAPI()
 
-# List the EXACT origins allowed to call your API
-
-
+# --- 1. Fix CORS ---
+# Replace the URL below with your actual Vercel URL
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://alt-text-alternative-6s2t-qzje1dq4t.vercel.app" 
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app = FastAPI()
 
+# --- 2. Initialize Gemini ---
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-async def stream_alt_text(img, limit):
-    prompt = f"Describe this image for alt-text in under {limit} words."
-    # We use stream=True to get parts of the text as they are created
-    response = model.generate_content([prompt, img], stream=True)
-    for chunk in response:
-        yield chunk.text
-
 @app.post("/generate-alt-text")
-async def generate_alt_text(file: UploadFile = File(...), word_limit: int = Form(20)):
-    # 1. Read image (uses very little RAM)
-    image_bytes = await file.read()
-    img = Image.open(io.BytesIO(image_bytes))
+async def generate_alt_text(
+    file: UploadFile = File(...), 
+    word_limit: int = Form(20)
+):
+    try:
+        # Read the uploaded file bytes
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+
+        # Open image and handle formats like TIFF or RGBA
+        img = Image.open(io.BytesIO(content))
+        
+        # Convert to RGB (required for many AI models and prevents 400 errors)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Generate alt text using Gemini
+        prompt = f"Describe this image for alt-text in under {word_limit} words."
+        response = model.generate_content([prompt, img])
+        
+        return {"alt_text": response.text}
     
-    # 2. Return a StreamingResponse using our generator
-    return StreamingResponse(stream_alt_text(img, word_limit), media_type="text/plain")
+    except Exception as e:
+        print(f"Error: {str(e)}") # Visible in Render logs
+        return HTTPException(status_code=500, detail=str(e))
