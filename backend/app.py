@@ -4,7 +4,20 @@ import google.generativeai as genai
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import StreamingResponse
 from PIL import Image
+from fastapi.middleware.cors import CORSMiddleware
 
+app = FastAPI()
+
+# List the EXACT origins allowed to call your API
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[*],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app = FastAPI()
 
 genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
