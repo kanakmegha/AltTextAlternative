@@ -1,9 +1,8 @@
 import os
-import base64
-import requests
 import io
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import google.generativeai as genai
 from PIL import Image
 
 app = FastAPI()
@@ -15,67 +14,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# 1. SETUP GOOGLE AI
+# Make sure your environment variable name is GEMINI_API_KEY
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+genai.configure(api_key=GEMINI_API_KEY)
 
-# 2026 STABLE FREE VISION MODEL: Xiaomi MiMo V2 Flash
-# This is NOT Gemini and NOT Llama. It is highly accurate and free.
-MODEL_ID = "xiaomi/mimo-v2-flash:free"
+# Using Gemini 2.0 Flash (Fastest and 100% Free on AI Studio)
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 @app.post("/generate-alt-text")
 async def generate_alt_text(file: UploadFile = File(...)):
-    if not OPENROUTER_API_KEY:
-        raise HTTPException(status_code=500, detail="API Key missing.")
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=500, detail="GEMINI_API_KEY missing in environment.")
 
     try:
-        # 1. Process Image
+        # 2. PROCESS IMAGE (The TIF Fix)
         file_bytes = await file.read()
         img = Image.open(io.BytesIO(file_bytes))
+        
+        # Convert TIF/PNG to standard RGB
         if img.mode != "RGB":
             img = img.convert("RGB")
-        img.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
-
-        # 2. Encode
-        buffer = io.BytesIO()
-        img.save(buffer, format="JPEG", quality=85)
-        base64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-        # 3. Payload
-        payload = {
-            "model": MODEL_ID,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "Describe this image in one concise sentence for alt-text."},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
-                        }
-                    ]
-                }
-            ],
-            # Adding provider routing bypass to help with 404s
-            "route": "fallback" 
-        }
-
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://alttextalternative.onrender.com",
-            "X-Title": "AltTextGen"
-        }
-
-        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=45)
         
-        if response.status_code != 200:
-            return {"error": f"API Error {response.status_code}", "details": response.text}
+        # Keep size reasonable for speed
+        img.thumbnail((1024, 1024))
+        
+        # 3. GENERATE ALT TEXT
+        # Google SDK handles PIL images directly!
+        response = model.generate_content([
+            "Write a concise, factual alt-text for this image for accessibility.",
+            img
+        ])
 
-        result = response.json()
-        if "choices" in result:
-            return {"alt_text": result["choices"][0]["message"]["content"].strip()}
+        if response.text:
+            return {"alt_text": response.text.strip()}
         
-        return {"error": "Empty Response", "details": result}
-        
+        return {"error": "No text generated"}
+
     except Exception as e:
-        return {"error": "Processing failed", "details": str(e)}
+        print(f"Error: {str(e)}")
+        return {"error": "Failed to process image", "details": str(e)}
