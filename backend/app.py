@@ -1,11 +1,14 @@
 import os
 import base64
 import requests
+import io
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
 
 app = FastAPI()
 
+# Enable CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -13,29 +16,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuration
+# Configuration from environment variables
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# NEW MODEL: Llama 3.2 11B Vision (Free, Accurate, and very Fast)
-MODEL_ID = "meta-llama/llama-3.2-11b-vision-instruct:free"
+# Selected Model: Gemini 2.0 Flash (One of the fastest/accurate vision models in 2026)
+MODEL_ID = "google/gemini-2.0-flash-001:free"
 
 @app.post("/generate-alt-text")
 async def generate_alt_text(file: UploadFile = File(...)):
     if not OPENROUTER_API_KEY:
-        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY missing")
+        raise HTTPException(status_code=500, detail="OPENROUTER_API_KEY is not configured.")
 
     try:
-        # Read file
-        image_bytes = await file.read()
+        # 1. Read the raw file bytes
+        file_bytes = await file.read()
         
-        # Convert to Base64
-        base64_image = base64.b64encode(image_bytes).decode("utf-8")
-        
-        # Determine MIME type
-        mime_type = file.content_type or "image/jpeg"
+        # 2. Open with Pillow to handle TIF, PNG, etc.
+        try:
+            img = Image.open(io.BytesIO(file_bytes))
+        except Exception:
+            return {"error": "Invalid image file. Please upload a valid JPG, PNG, or TIF."}
 
-        # Llama 3.2 Vision Payload
+        # 3. Pre-processing for Scalability
+        # Convert to RGB (required for JPEG saving, especially if TIF/PNG has transparency)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        
+        # Resize if image is too large (speeds up the API response and prevents timeouts)
+        max_size = 1024
+        if max(img.width, img.height) > max_size:
+            img.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+        # 4. Save to a byte buffer as a compressed JPEG
+        buffer = io.BytesIO()
+        img.save(buffer, format="JPEG", quality=85)
+        base64_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+        # 5. Prepare OpenRouter Payload
         payload = {
             "model": MODEL_ID,
             "messages": [
@@ -44,47 +62,45 @@ async def generate_alt_text(file: UploadFile = File(...)):
                     "content": [
                         {
                             "type": "text", 
-                            "text": "Write a clean, descriptive alt-text for this image. Be concise and focus on the visual facts."
+                            "text": "Generate a concise, accurate alt-text for this image for accessibility purposes."
                         },
                         {
                             "type": "image_url",
                             "image_url": {
-                                "url": f"data:{mime_type};base64,{base64_image}"
+                                "url": f"data:image/jpeg;base64,{base64_image}"
                             }
                         }
                     ]
                 }
             ],
-            "temperature": 0.5, # Keeps descriptions factual
             "max_tokens": 100
         }
 
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://alttextapp.com", # Required by some OpenRouter models
+            "HTTP-Referer": "https://alttextapp-production.up.railway.app", # Replace with your URL if needed
+            "X-Title": "AltTextApp"
         }
 
-        # Request
-        response = requests.post(
-            OPENROUTER_URL,
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-
+        # 6. Make the API Call
+        response = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=45)
+        
         if response.status_code != 200:
-            # This helps you see the REAL error if it's a 404 or 401
-            return {"error": f"API Error {response.status_code}", "details": response.text}
+            return {"error": f"API Provider Error {response.status_code}", "details": response.text}
 
         result = response.json()
         
         if "choices" in result and len(result["choices"]) > 0:
-            content = result["choices"][0]["message"]["content"]
-            return {"alt_text": content.strip()}
+            alt_text = result["choices"][0]["message"]["content"].strip()
+            return {"alt_text": alt_text}
         
-        return {"error": "No description returned", "details": result}
+        return {"error": "No description generated by the model.", "details": result}
         
     except Exception as e:
-        print(f"Server Error: {str(e)}")
+        print(f"Server error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
