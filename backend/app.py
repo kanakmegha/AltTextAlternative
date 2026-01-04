@@ -20,7 +20,8 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Using Gemini 2.0 Flash (Fastest and 100% Free on AI Studio)
-model = genai.GenerativeModel('gemini-2.0-flash')
+# Change from 'gemini-2.0-flash' to 'gemini-1.5-flash'
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 @app.post("/generate-alt-text")
 async def generate_alt_text(file: UploadFile = File(...)):
