@@ -17,7 +17,7 @@ function App() {
     formData.append("word_limit", 20);
   
     try {
-      const response = await fetch("https://alttextalternative.onrender.com/generate-alt-text", {
+      const response = await fetch(`${API_BASE_URL}/generate-alt-text`, {
         method: "POST",
         body: formData,
         // Note: Do NOT set Content-Type header manually; the browser does it for FormData
