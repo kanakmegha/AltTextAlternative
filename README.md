@@ -32,3 +32,28 @@ The system is composed of three main layers to ensure stability and cost-efficie
 Set your API key as an environment variable in your hosting platform (Render, Vercel, or locally):
 ```env
 HF_API_KEY=your_huggingface_token_here
+
+## 🚦 Local Installation
+
+To get the project running on your local machine, follow these steps:
+
+### 1. Prerequisites
+- **Python 3.9 or higher** installed.
+- A **Hugging Face Access Token** with `Inference` permissions.
+
+### 2. Setup Procedure
+```bash
+# Clone your repository
+git clone [https://github.com/your-username/alttextalternative.git](https://github.com/your-username/alttextalternative.git)
+cd alttextalternative
+
+# Create and activate a virtual environment
+python -m venv venv
+
+# On Windows:
+venv\Scripts\activate
+# On Mac/Linux:
+source venv/bin/activate
+
+# Install required libraries
+pip install -r requirements.txt
