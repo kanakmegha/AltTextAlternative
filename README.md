@@ -32,7 +32,7 @@ The system is composed of three main layers to ensure stability and cost-efficie
 Set your API key as an environment variable in your hosting platform (Render, Vercel, or locally):
 ```env
 HF_API_KEY=your_huggingface_token_here
-
+```
 ## 🚦 Local Installation
 
 To get the project running on your local machine, follow these steps:
@@ -57,10 +57,11 @@ source venv/bin/activate
 
 # Install required libraries
 pip install -r requirements.txt
-
+```
 ### 3. Environment Configuration
 To keep your API keys secure, use a `.env` file in the root directory. **Never commit your `.env` file to GitHub.**
 
 Create a file named `.env`:
 ```env
 HF_API_KEY=hf_your_actual_token_here
+```
